@@ -27,18 +27,14 @@ modLda <- train(classe ~ ., data = training, method = 'lda')
 
 modRpart <- train(classe ~ ., data = training, method = 'rpart')
 
-cl <- makeCluster(12)
-registerDoMC(cl)
+registerDoMC(cores = 12)
 modGbm <- train(classe ~ ., data = training, method = 'gbm', verbose = F,
   trControl = trainControl(## 10-fold CV, repeat 3 times
     method = "repeatedcv", number = 4, repeats = 3))
-stopCluster(cl)
 
-cl <- makeCluster(12)
-registerDoMC(cl)
+registerDoMC(cores = 12)
 modRf <- train(classe ~ ., data = training, method = 'rf', 
   trControl = trainControl(method = 'cv', number = 10))
-stopCluster(cl)
 
 confusionMatrix(predict(modLda, newdata = testing), testing$classe)
 confusionMatrix(predict(modRpart, newdata = testing), testing$classe)
