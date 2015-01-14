@@ -1,0 +1,170 @@
+---
+title: "Practical Machine Learning Project"
+author: "Jianhua Huang"
+date: "Tuesday, January 13, 2015"
+output: html_document
+---
+
+### Synopsis
+This project is aimed at using various machine learning methods to explore the weight lifting exercise dataset. The goal is to predict the exercise classes based on a set of predictors. In this exercise, we mainly ask four questions:
+
+1. How you built the model
+2. How you used cross validation
+3. What is the out of sample error
+4. Why you made the choice on the final model
+
+This report is broken into four parts with the above four questions in concer:
+
+1. Data cleaning and feature selection
+2. Building models
+3. Model evaluation and test
+4. Predicting results
+5. Submitting results
+
+### Data cleaning and feature selection
+In this part, we first set up the R working options with the following commands.
+```{r option.sets, echo=TRUE,warning=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo = T, message = FALSE, warning=FALSE,results ='markup', cache = F)
+dir <- 'C:/Users/temp/Dropbox/test/coursera/PracticalMachineLearning'
+opts_knit$set(root.dir = dir)
+```
+
+Then we load the original data into R with NA and "" set as missing values, and first column set as row names.
+```{r load.data, echo=TRUE,warning=FALSE,message=FALSE}
+invisible(sapply(c('caret', 'rattle', 'ggplot2', 'doSNOW'), require, character.only = T))
+buildData <- read.csv('pml-training.csv', row.names = 1, na.string = c(NA, ''))
+validation <- read.csv('pml-testing.csv', row.names = 1, na.string = c(NA, ''))
+```
+
+From the data, we can see a lot of missing data in some column, which we want to remove. In this research, I exclude all the columns with more than 90% of the values are missing data.
+```{r data.cleanup}
+naCol <- which(colSums(is.na(buildData)) > .9 * nrow(buildData))
+buildData <- buildData[, -naCol]
+validation <- validation[, -naCol]  # keep the same columns in validataion
+```
+
+After removing the missing data column, we can check whether there is any zero variance column with the `nearZeroVar` function:
+```{r, zero.variance, results='markup'}
+nzv <- nearZeroVar(buildData, saveMetrics = T) 
+nzv
+```
+From the output, we can see that no column is zero variance. Thus, we want to keep all left columns in the following analysis.
+
+In order to train and test the models, we need to first seperate the buildData into two parts: training data and testing data:
+```{r, train.testing}
+inTrain <- createDataPartition(y = buildData$classe, p = .7, list = F)
+training <- buildData[inTrain, ]
+testing <- buildData[-inTrain, ]
+```
+
+
+We can check the dimension of the three datasets, to make sure they are cleaned up and split correctly. 
+```{r, dim.data}
+dim(training)
+dim(testing)
+dim(validation)
+```
+
+### Building Models
+After the cleaning the data and selecting the features we want, we can then build the models with all predictors. In this research, we will build models with four different methods: linear discriminant analysis ('lda'), decision tree ('rpart'), random forest ('rf'), and gradient boosting ('gbm'). Becuase the rf and gbm methods take long time for computation, we set up the parallel computation for these two models with 6 cores. 
+```{r,model.building}
+set.seed(123)
+modLda <- train(classe ~ ., data = training, method = 'lda')
+
+modRpart <- train(classe ~ ., data = training, method = 'rpart')
+
+cl <- makeCluster(6)
+registerDoSNOW(cl)
+modGbm <- train(classe ~ ., data = training, method = 'gbm', verbose = F,
+  trControl = trainControl(## 10-fold CV, repeat 3 times
+    method = "repeatedcv", number = 4, repeats = 3))
+stopCluster(cl)
+
+cl <- makeCluster(6)
+registerDoSNOW(cl)
+modRf <- train(classe ~ ., data = training, method = 'rf', 
+  trControl = trainControl(method = 'cv', number = 10))
+stopCluster(cl)
+```
+
+### Model evaluation and testing
+When all models finish running, we can test their performance with the confusion matrix. 
+```{r, model.evaluation,results='markup'}
+print(confusionMatrix(predict(modLda, newdata = testing), testing$classe), digits = 3)
+print(confusionMatrix(predict(modRpart, newdata = testing), testing$classe), digits = 3)
+confusionMatrix(predict(modGbm, newdata = testing), testing$classe)
+confusionMatrix(predict(modRf, newdata = testing), testing$classe)
+```
+
+From these results, we can see that the random forest and gradient boosting models perform best with accuracy very close 1, followed by decent accuracy in linear discriminant analysis. But the decision tree model doesn't work well, with accuracy being about 0.5.  
+
+### Predicting results
+With the above models, we can predict the results for validation data. 
+```{r, predicting.results}
+predict(modLda, validation)
+predict(modRpart, validation)
+predict(modGbm, validation)
+predict(modRf, validation)
+```
+We can see that, the results from random forest model and gradient boosting model are exactly the same. We can plot the decision tree flowchart and the clustering figures to check the results:
+
+```{r, plots}
+fancyRpartPlot(modRpart$finalModel)
+
+qplot(roll_belt, pitch_forearm, colour = classe, data = testing)
+```
+
+
+### Submitting results
+We finally choose the results from random forest model, because its accuracy is highese to submit to the course project. 
+
+Firstly, we prepare the results with the following codes:
+```{r,submitting.result}
+
+answers <- predict(modRf, newdata = validation)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("PML.project/problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
+Then, we can submit the file to the corresponding questions!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
